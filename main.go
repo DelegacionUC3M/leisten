@@ -46,14 +46,17 @@ func main() {
 
 	itemsGroup := r.Group("/items")
 	{
-		itemsGroup.GET("/list", APIHandler.ListItems)
-		itemsGroup.POST("/create", APIHandler.CreateItems)
-		itemsGroup.GET("/delete/:id", APIHandler.DeleteItem)
+		itemsGroup.GET("/", APIHandler.GetAllItems)
+		itemsGroup.GET("/:id", APIHandler.ListItem)
+		itemsGroup.POST("/:id", APIHandler.CreateItems)
+		itemsGroup.DELETE("/:id", APIHandler.DeleteItem)
+		itemsGroup.PUT("/:id", APIHandler.UpdateItem)
 	}
 
 	loansGroup := r.Group("/loans")
 	{
-		loansGroup.GET("/list", APIHandler.GetLoans)
+		loansGroup.GET("/", APIHandler.GetAllLoans)
+		loansGroup.POST("/:id", APIHandler.CreateLoan)
 	}
 
 	r.Run()
