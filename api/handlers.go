@@ -48,7 +48,6 @@ func (API *APIHandler) ListItem(c *gin.Context) {
 func (API *APIHandler) GetAllItems(c *gin.Context) {
 
 	var itemsList []models.Item
-	// itemHolder := models.Item{}
 	queryHolder := make(map[string]interface{})
 
 	amount := c.Query("amount")

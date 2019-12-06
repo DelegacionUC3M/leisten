@@ -58,6 +58,5 @@ func main() {
 		loansGroup.GET("/", APIHandler.GetAllLoans)
 		loansGroup.POST("/:id", APIHandler.CreateLoan)
 	}
-
 	r.Run()
 }
