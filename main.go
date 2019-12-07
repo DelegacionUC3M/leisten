@@ -5,7 +5,6 @@ import (
 	"github.com/BurntSushi/toml"
 	api "github.com/DelegacionUC3M/leisten/api"
 	models "github.com/DelegacionUC3M/leisten/models"
-	// "github.com/gin-gonic/gin"
 	"github.com/gorilla/mux"
 
 	"github.com/jinzhu/gorm"
@@ -34,9 +33,11 @@ func main() {
 	var config Databases
 	_, err := toml.DecodeFile(tomlFile, &config)
 
-	conn := fmt.Sprintf("user=%s password=%s dbname=%s sslmode=disable", config.Loans.User, config.Loans.Password, config.Loans.Name)
+	conn := fmt.Sprintf("host=db_postgres user=%s password=%s dbname=%s sslmode=disable",
+		config.Loans.User, config.Loans.Password, config.Loans.Name)
 
-	if db, err := gorm.Open("postgres", conn); err != nil {
+	db, err := gorm.Open("postgres", conn)
+	if err != nil {
 		panic(err)
 	}
 	defer db.Close()
@@ -48,7 +49,7 @@ func main() {
 
 	r := mux.NewRouter().StrictSlash(true)
 
-	itemRouter := r.PathPrefix("/items").Subrouter()
+	itemRouter := r.PathPrefix("/prestamos/items").Subrouter()
 
 	itemRouter.HandleFunc("/depleted", Handler.GetDepletedItems).Methods("GET")
 	itemRouter.HandleFunc("/{itemID}", Handler.ListItem).Methods("GET")
@@ -57,6 +58,7 @@ func main() {
 	itemRouter.HandleFunc("", Handler.CreateItem).Methods("POST")
 	itemRouter.HandleFunc("", Handler.GetAllItems).Methods("GET")
 
+	fmt.Println("Starting server on :8000")
 	log.Fatal(http.ListenAndServe(":8000", r))
 
 }
