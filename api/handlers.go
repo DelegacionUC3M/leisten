@@ -3,22 +3,24 @@ package api
 import (
 	"encoding/json"
 	// "fmt"
-	"github.com/gin-gonic/gin"
+	"github.com/gorilla/mux"
 	"github.com/jinzhu/gorm"
 	"net/http"
 
 	models "github.com/DelegacionUC3M/leisten/models"
-	"strconv"
+	// "strconv"
 )
 
-// APIHandler contains a pointer to the database
-type APIHandler struct {
+// Handler contains a pointer to the database
+type Handler struct {
 	DB *gorm.DB
 }
 
-// GetItems returns the item with the given id
-func (API *APIHandler) ListItem(c *gin.Context) {
-	itemID := c.Param("id")
+// ListItem returns the item with the requested id
+func (API *Handler) ListItem(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	itemID := mux.Vars(r)["itemID"]
 
 	var (
 		count int
@@ -29,139 +31,130 @@ func (API *APIHandler) ListItem(c *gin.Context) {
 		Where("id = ?", itemID).Count(&count)
 
 	if count == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"message": "Item does not exist",
-		})
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(
+			map[string]string{"message": "Item does not exist."})
 	} else {
 		API.DB.First(&item, itemID)
-		c.JSON(http.StatusOK, item)
+
+		w.WriteHeader(http.StatusOK)
+		payload, _ := json.Marshal(item)
+		w.Write(payload)
 	}
 }
 
-// GetAllItems returns all available items
-//
-// With no query parameters returns all objects in the database
-// Due to limitations of Gin we cannot have an entry point like /items/depleted to
-// query objects with Amount = 0. The user has to create that specific query
-// The solution I propose is to create a map of all the query parameters
-// If the parameter is not nil, add it to the list and perform the query
-func (API *APIHandler) GetAllItems(c *gin.Context) {
+// DeleteItem deletes the item with the requested id from the database
+func (API *Handler) DeleteItem(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 
-	var itemsList []models.Item
-	queryHolder := make(map[string]interface{})
-
-	amount := c.Query("amount")
-
-	if amount != "" {
-		queryHolder["amount"], _ = strconv.Atoi(amount)
-	}
-
-	API.DB.Where(queryHolder).Find(&itemsList)
-
-	// TODO: Think about what this endpoint should return
-	if len(itemsList) > 0 {
-		c.JSON(http.StatusOK, itemsList)
-	} else {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"message": "Could not find items with the requirements",
-		})
-	}
-}
-
-// CreateItems inserts new items into the database
-func (API *APIHandler) CreateItems(c *gin.Context) {
-	var data models.Item
-
-	if err := json.NewDecoder(c.Request.Body).Decode(&data); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"message": err.Error(),
-		})
-	}
-	API.DB.Create(&data)
-	c.JSON(http.StatusOK, gin.H{
-		"message": "New item created",
-		"id":      data.ID,
-	})
-}
-
-// DeleteItem deletes one item from the database
-func (API *APIHandler) DeleteItem(c *gin.Context) {
-	itemID := c.Param("id")
+	itemID := mux.Vars(r)["itemID"]
 
 	var count int
 	API.DB.Model(&models.Item{}).
 		Where("id = ?", itemID).Count(&count)
 
 	if count == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"message": "Item does not exist",
-		})
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(
+			map[string]string{"message": "Item does not exist."})
 	} else {
 		API.DB.Where("id = ?", itemID).Delete(&models.Item{})
-		c.JSON(http.StatusOK, gin.H{
-			"message": "Item deleted correctly",
-		})
+
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{
+			"message": "Item deleted correctly"})
 	}
 }
 
-// UpdateItem updates the parameter of the given item
-func (API *APIHandler) UpdateItem(c *gin.Context) {
-	itemID := c.Param("id")
+// GetAllItems returns all items available in the database
+func (API *Handler) GetAllItems(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
 
 	var (
-		count int
-		item  models.Item
+		itemsList []models.Item
+		item      models.Item
+	)
+
+	itemsRows, err := API.DB.Model(models.Item{}).Rows()
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]string{
+			"message": "Could not fetch items"})
+		return
+	}
+	for itemsRows.Next() {
+		API.DB.ScanRows(itemsRows, &item)
+		itemsList = append(itemsList, item)
+	}
+
+	w.WriteHeader(http.StatusOK)
+	payload, _ := json.Marshal(itemsList)
+	w.Write(payload)
+}
+
+// GetDepletedItems returns all items whose amount is 0
+func (API *Handler) GetDepletedItems(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var itemsList []models.Item
+
+	API.DB.Where("amount = 0").Find(&itemsList)
+	w.WriteHeader(http.StatusOK)
+	payload, _ := json.Marshal(itemsList)
+	w.Write(payload)
+}
+
+// CreateItems creates a new item and inserts it into the database
+func (API *Handler) CreateItem(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	var data models.Item
+
+	if err := json.NewDecoder(r.Body).Decode(&data); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"message": "Could not create item"})
+	} else {
+		API.DB.Create(&data)
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]uint{"id": data.ID})
+	}
+}
+
+// UpdateItem updates the item with the given id based on the payload
+// The payload must be a full new object
+//
+// Gorm only updates the attributes that are not null
+func (API *Handler) UpdateItem(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	itemID := mux.Vars(r)["itemID"]
+
+	var (
+		count       int
+		item        models.Item
+		itemChanges models.Item
 	)
 
 	API.DB.Model(&item).
 		Where("id = ?", itemID).Count(&count)
 
 	if count == 0 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"message": "The item does not exist",
-		})
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{
+			"message": "Item does not exist"})
 	} else {
-		// TODO: Handle update
-		// item.Amount = 100
-		// API.DB.Save(&item)
-		c.JSON(http.StatusOK, item)
+		err := json.NewDecoder(r.Body).Decode(&itemChanges)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			json.NewEncoder(w).Encode(map[string]string{
+				"message": "Body should be an item"})
+		} else {
+			API.DB.Model(&item).Updates(itemChanges)
+
+			w.WriteHeader(http.StatusOK)
+			json.NewEncoder(w).Encode(map[string]string{
+				"message": "Item updated correctly"})
+		}
 	}
-
-}
-
-// GetLoans returns all available loans
-func (API *APIHandler) GetAllLoans(c *gin.Context) {
-	loansRows, err := API.DB.Model(&models.Loan{}).Rows()
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"message": "Could not get loans",
-		})
-	}
-	defer loansRows.Close()
-
-	var loan models.Loan
-	var loanList []models.Loan
-
-	for loansRows.Next() {
-		API.DB.ScanRows(loansRows, &loan)
-		loanList = append(loanList, loan)
-	}
-
-	c.JSON(http.StatusOK, loanList)
-}
-
-// CreateLoan creates an student loan for the given user id
-func (API *APIHandler) CreateLoan(c *gin.Context) {
-	var data models.Loan
-
-	if err := json.NewDecoder(c.Request.Body).Decode(&data); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"message": err.Error(),
-		})
-	}
-	API.DB.Create(&data)
-	c.JSON(http.StatusOK, gin.H{
-		"message": "New loan created",
-		"id":      data.ID,
-	})
 }
