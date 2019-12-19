@@ -34,10 +34,22 @@ type Loan struct {
 	gorm.Model
 	Item        Item `gorm:"foreignkey:ItemID"`
 	ItemID      int
-	Nia         int `gorm:"not_null"`
-	Amount      int
+	Nia         int       `gorm:"not_null"`
+	Amount      int       `gorm:"not_null"`
 	LoanDate    time.Time `gorm:"not_null"`
 	RefundDate  time.Time
 	Finished    bool `gorm:"default:false"`
 	Description string
+}
+
+// Penalty represents a sanction given to a user
+type Penalty struct {
+	gorm.Model
+	Nia          int
+	Loan         Loan `gorm:"foreignkey:LoanID"`
+	LoanID       int
+	sanctionDate time.Time `gorm:"not_null"`
+	PenaltyDate  time.Time
+	Finished     bool `gorm:"default:false"`
+	Description  string
 }

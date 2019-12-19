@@ -15,6 +15,7 @@ import (
 
 const (
 	tomlFile = "config.toml"
+	port     = ":8000"
 )
 
 // Database holds the parameters necessary to connect to a database
@@ -33,7 +34,8 @@ func main() {
 	var config Databases
 	_, err := toml.DecodeFile(tomlFile, &config)
 
-	conn := fmt.Sprintf("host=db_postgres user=%s password=%s dbname=%s sslmode=disable",
+	// conn := fmt.Sprintf("host=db_postgres user=%s password=%s dbname=%s sslmode=disable",
+	conn := fmt.Sprintf("user=%s password=%s dbname=%s sslmode=disable",
 		config.Loans.User, config.Loans.Password, config.Loans.Name)
 
 	db, err := gorm.Open("postgres", conn)
@@ -42,7 +44,7 @@ func main() {
 	}
 	defer db.Close()
 
-	db.AutoMigrate(&models.Item{})
+	db.AutoMigrate(&models.Item{}, &models.Loan{})
 
 	Handler := new(api.Handler)
 	Handler.DB = db
@@ -58,7 +60,12 @@ func main() {
 	itemRouter.HandleFunc("", Handler.CreateItem).Methods("POST")
 	itemRouter.HandleFunc("", Handler.GetAllItems).Methods("GET")
 
-	fmt.Println("Starting server on :8000")
-	log.Fatal(http.ListenAndServe(":8000", r))
+	loanRouter := r.PathPrefix("/prestamos/loans").Subrouter()
+
+	loanRouter.HandleFunc("", Handler.GetAllLoans).Methods("GET")
+	loanRouter.HandleFunc("", Handler.CreateLoan).Methods("POST")
+
+	fmt.Println("Starting server on ", port)
+	log.Fatal(http.ListenAndServe(port, r))
 
 }
